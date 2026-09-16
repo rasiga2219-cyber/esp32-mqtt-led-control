@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 IoT Dashboard</title>
+    <!-- Include CDN for Paho MQTT Client library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js" type="text/javascript"></script>
+    <style>
+        :root {
+            --bg-primary: #0f172a;
+            --bg-card: #1e293b;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent-green: #10b981;
+            --accent-red: #ef4444;
+            --accent-blue: #3b82f6;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-main);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        /* --- LOGIN SCREEN STYLES --- */
+        .login-container {
+            width: 100%;
+            max-width: 400px;
+            background-color: var(--bg-card);
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+            border: 1px solid #334155;
+            text-align: center;
+            display: block;
+        }
+
+        .login-container h2 {
+            margin-bottom: 20px;
+            font-size: 1.6rem;
+        }
+
+        .input-group {
+            margin-bottom: 15px;
+            text-align: left;
+        }
+
+        .input-group label {
+            display: block;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-bottom: 5px;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            background-color: #0f172a;
+            color: var(--text-main);
+            font-size: 1rem;
+            outline: none;
+        }
+
+        .input-group input:focus {
+            border-color: var(--accent-blue);
+        }
+
+        .login-btn {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            background-color: var(--accent-blue);
+            color: white;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: background 0.2s;
+        }
+
+        .login-btn:hover {
+            background-color: #2563eb;
+        }
+
+        .error-msg {
+            color: var(--accent-red);
+            font-size: 0.9rem;
+            margin-top: 10px;
+            display: none;
+        }
+
+        /* --- DASHBOARD CONTAINER STYLES --- */
+        .dashboard-container {
+            width: 100%;
+            max-width: 450px;
+            background-color: var(--bg-card);
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+            border: 1px solid #334155;
+            display: none; /* Hidden until login successful */
+        }
+
+        header {
+            margin-bottom: 25px;
+            text-align: center;
+        }
+
+        header h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            font-size: 0.85rem;
+            font-weight: 500;
+            padding: 4px 12px;
+            border-radius: 20px;
+            background-color: #334155;
+            color: var(--text-muted);
+            transition: all 0.3s ease;
+        }
+
+        .status-badge::before {
+            content: '';
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 8px;
+            background-color: var(--text-muted);
+        }
+
+        .status-badge.connected {
+            color: var(--accent-green);
+            background-color: rgba(16, 185, 129, 0.1);
+        }
+        .status-badge.connected::before {
+            background-color: var(--accent-green);
+        }
+
+        .status-badge.connecting {
+            color: var(--accent-blue);
+            background-color: rgba(59, 130, 246, 0.1);
+        }
+        .status-badge.connecting::before {
+            background-color: var(--accent-blue);
+        }
+
+        .control-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            align-items: center;
+            margin-bottom: 25px;
+        }
+
+        .control-label {
+            font-size: 1.1rem;
+            color: var(--text-muted);
+        }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 80px;
+            height: 44px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #475569;
+            transition: .4s;
+            border-radius: 44px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 36px;
+            width: 36px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+        input:checked + .slider {
+            background-color: var(--accent-green);
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(36px);
+        }
+
+        .feed-container {
+            background-color: #0f172a;
+            border-radius: 8px;
+            padding: 15px;
+            border: 1px solid #334155;
+        }
+
+        .feed-title {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+
+        .feed-log {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.85rem;
+            height: 100px;
+            overflow-y: auto;
+            color: #38bdf8;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .log-entry {
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- --- LOGIN VIEW --- -->
+    <div class="login-container" id="loginBox">
+        <h2>Dashboard Login</h2>
+        <div class="input-group">
+            <label for="username">Username</label>
+            <input type="text" id="username" placeholder="Enter username">
+        </div>
+        <div class="input-group">
+            <label for="password">Password</label>
+            <input type="password" id="password" placeholder="Enter password">
+        </div>
+        <button class="login-btn" onclick="handleLogin()">Login</button>
+        <div class="error-msg" id="errorMsg">Invalid Username or Password!</div>
+    </div>
+
+    <!-- --- MAIN DASHBOARD VIEW --- -->
+    <div class="dashboard-container" id="dashboardBox">
+        <header>
+            <h1>ESP32 LED Control Dashboard</h1>
+            <div id="broker-status" class="status-badge connecting">Connecting to Broker...</div>
+        </header>
+
+        <main>
+            <div class="control-panel">
+                <span class="control-label">LED Status Override</span>
+                <label class="switch">
+                    <input type="checkbox" id="ledToggle" onchange="toggleLED(this)">
+                    <span class="slider"></span>
+                </label>
+            </div>
+
+            <div class="feed-container">
+                <div class="feed-title">ESP32 Device Status Feed</div>
+                <div id="log" class="feed-log">
+                    <div class="log-entry">> Initializing dashboard...</div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // ============================================
+        // AUTHORIZED USERS LIST (Multiple Accounts)
+        // Format: "username": "password"
+        // ============================================
+        const AUTHORIZED_USERS = {
+            "admin": "admin@123",
+            "admin2": "admin2@123",
+"rasiga": "rasiga123"
+
+        };
+
+        // --- HIVEMQ CONFIGURATION ---
+        const MQTT_HOST = "b29b86e1953c4b8abb057cc42e81797a.s1.eu.hivemq.cloud";
+        const MQTT_PORT = 8884; // WebSocket Secure port required by browsers
+        const MQTT_USER = "jairasigagk";
+        const MQTT_PASS = "Rasiga@08";
+        
+        const TOPIC_SUB = "home/led/status";
+        const TOPIC_PUB = "home/led";
+
+        let client;
+        const statusBadge = document.getElementById("broker-status");
+        const logContainer = document.getElementById("log");
+        const toggleSwitch = document.getElementById("ledToggle");
+
+        // Handle Login Submission with Multiple User Check
+        function handleLogin() {
+            const userIn = document.getElementById("username").value.trim();
+            const passIn = document.getElementById("password").value;
+            const errorMsg = document.getElementById("errorMsg");
+
+            // Validate against authorized users dictionary
+            if (AUTHORIZED_USERS.hasOwnProperty(userIn) && AUTHORIZED_USERS[userIn] === passIn) {
+                // Hide login box, show dashboard
+                document.getElementById("loginBox").style.display = "none";
+                document.getElementById("dashboardBox").style.display = "block";
+                
+                // Fire up MQTT connection
+                initMQTT();
+            } else {
+                errorMsg.style.display = "block";
+                errorMsg.innerText = "Invalid Username or Password!";
+            }
+        }
+
+        function addLog(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            const entry = document.createElement("div");
+            entry.className = "log-entry";
+            entry.innerText = `[${timestamp}] ${message}`;
+            logContainer.appendChild(entry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        function initMQTT() {
+            const clientId = "web_client_" + Math.random().toString(16).substr(2, 8);
+            client = new Paho.MQTT.Client(MQTT_HOST, Number(MQTT_PORT), clientId);
+
+            client.onConnectionLost = onConnectionLost;
+            client.onMessageArrived = onMessageArrived;
+
+            const options = {
+                useSSL: true,
+                userName: MQTT_USER,
+                password: MQTT_PASS,
+                onSuccess: onConnect,
+                onFailure: onFailure
+            };
+
+            addLog("Connecting to HiveMQ Cloud via WebSockets...");
+            client.connect(options);
+        }
+
+        function onConnect() {
+            statusBadge.className = "status-badge connected";
+            statusBadge.innerText = "Broker Connected";
+            addLog("Connected! Subscribing to " + TOPIC_SUB);
+            client.subscribe(TOPIC_SUB);
+        }
+
+        function onFailure(response) {
+            statusBadge.className = "status-badge";
+            statusBadge.innerText = "Connection Failed";
+            addLog("Error: " + response.errorMessage);
+            setTimeout(initMQTT, 5000);
+        }
+
+        function onConnectionLost(responseObject) {
+            statusBadge.className = "status-badge";
+            statusBadge.innerText = "Disconnected";
+            addLog("Connection lost: " + responseObject.errorMessage);
+            if (responseObject.errorCode !== 0) {
+                setTimeout(initMQTT, 5000);
+            }
+        }
+
+        function onMessageArrived(message) {
+            const payload = message.payloadString;
+            addLog(`Received: "${payload}"`);
+
+            if (payload === "LED is ON") {
+                toggleSwitch.checked = true;
+            } else if (payload === "LED is OFF") {
+                toggleSwitch.checked = false;
+            }
+        }
+
+        function toggleLED(checkbox) {
+            if (!client || !client.isConnected()) {
+                addLog("Cannot send command: Not connected to broker.");
+                checkbox.checked = !checkbox.checked;
+                return;
+            }
+
+            const command = checkbox.checked ? "ON" : "OFF";
+            const message = new Paho.MQTT.Message(command);
+            message.destinationName = TOPIC_PUB;
+            client.send(message);
+            addLog(`Sent command: ${command}`);
+        }
+
+        // Allow pressing Enter key in password field to login
+        document.getElementById("password").addEventListener("keyup", function(event) {
+            if (event.key === "Enter") {
+                handleLogin();
+            }
+        });
+    </script>
+</body>
+  </html>
